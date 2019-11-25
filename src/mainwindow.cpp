@@ -140,6 +140,7 @@ MainWindow::MainWindow():
   contextMenu_->addAction(ui.actionFullScreen);
   contextMenu_->addAction(ui.actionShowOutline);
   contextMenu_->addAction(ui.actionAnnotations);
+  contextMenu_->addAction(ui.actionCompact);
   contextMenu_->addSeparator();
   contextMenu_->addAction(ui.actionRotateClockwise);
   contextMenu_->addAction(ui.actionRotateCounterclockwise);
@@ -171,6 +172,9 @@ MainWindow::MainWindow():
   connect(shortcut, &QShortcut::activated, this, &MainWindow::on_actionNext_triggered);
   shortcut = new QShortcut(Qt::Key_Escape, this);
   connect(shortcut, &QShortcut::activated, this, &MainWindow::onKeyboardEscape);
+
+  ui.actionCompact->setChecked(settings.isCompactInterface());
+  on_actionCompact_triggered(settings.isCompactInterface());
 }
 
 MainWindow::~MainWindow() {
@@ -1036,6 +1040,14 @@ void MainWindow::on_actionSlideShow_triggered(bool checked) {
   }
 }
 
+void MainWindow::on_actionCompact_triggered(bool checked){
+  ui.menubar->setVisible(!checked);
+  ui.toolBar->setVisible(!checked);
+  ui.annotationsToolBar->setVisible(!checked);
+  ui.statusBar->setVisible(!checked);
+  toggleActions(checked);
+}
+
 void MainWindow::on_actionShowThumbnails_triggered(bool checked) {
   setShowThumbnails(checked);
 }
@@ -1144,7 +1156,6 @@ void MainWindow::setShowExifData(bool show) {
 }
 
 void MainWindow::changeEvent(QEvent* event) {
-  // TODO: hide menu/toolbars in full screen mode and make the background black.
   if(event->type() == QEvent::WindowStateChange) {
     Application* app = static_cast<Application*>(qApp);
     if(isFullScreen()) { // changed to fullscreen mode
@@ -1156,37 +1167,37 @@ void MainWindow::changeEvent(QEvent* event) {
       ui.statusBar->hide();
       if(thumbnailsDock_)
         thumbnailsDock_->hide();
+    
       // NOTE: in fullscreen mode, all shortcut keys in the menu are disabled since the menu
       // is disabled. We needs to add the actions to the main window manually to enable the
       // shortcuts again.
       ui.menubar->hide();
-      const auto actions = ui.menubar->actions();
-      for(QAction* action : qAsConst(actions)) {
-        if(!action->shortcut().isEmpty())
-          addAction(action);
-      }
-      addActions(ui.menubar->actions());
+      toggleActions(false); 
+    
       ui.view->hideCursor(true);
+      ui.actionCompact->setDisabled(true);
     }
     else { // restore to normal window mode
       ui.view->setFrameStyle(QFrame::StyledPanel|QFrame::Sunken);
       ui.view->setBackgroundBrush(QBrush(app->settings().bgColor()));
       ui.view->updateOutline();
+    
       // now we're going to re-enable the menu, so remove the actions previously added.
-      const auto actions_ = ui.menubar->actions();
-      for(QAction* action : qAsConst(actions_)) {
-        if(!action->shortcut().isEmpty())
-          removeAction(action);
-      }
-      ui.menubar->show();
-      ui.toolBar->show();
-      if(ui.actionAnnotations->isChecked()){
+      toggleActions(false); 
+      
+      if(!ui.actionCompact->isChecked()){
+        ui.menubar->show();
+        ui.toolBar->show();
+        if(ui.actionAnnotations->isChecked()){
           ui.annotationsToolBar->show();
+        }
+        ui.statusBar->show();
+        if(thumbnailsDock_){
+          thumbnailsDock_->show();
+        }
       }
-      ui.statusBar->show();
-      if(thumbnailsDock_)
-        thumbnailsDock_->show();
       ui.view->hideCursor(false);
+      ui.actionCompact->setDisabled(false);
     }
   }
   QWidget::changeEvent(event);
@@ -1276,4 +1287,21 @@ void MainWindow::onFilesRemoved(const Fm::FileInfoList& files) {
 
 void MainWindow::onFileDropped(const QString path) {
     openImageFile(path);
+}
+
+void MainWindow::toggleActions(bool remove){
+  if(remove){
+      const auto actions = ui.menubar->actions();
+      for(QAction* action : qAsConst(actions)) {
+        if(!action->shortcut().isEmpty())
+          addAction(action);
+      }
+      addActions(ui.menubar->actions());
+  }else{
+      const auto actions_ = ui.menubar->actions();
+      for(QAction* action : qAsConst(actions_)) {
+        if(!action->shortcut().isEmpty())
+          removeAction(action);
+      }
+  }
 }
